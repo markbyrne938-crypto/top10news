@@ -12,24 +12,30 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  actions: write   # lets the run start the next run (see "rearm" below)
 
+# At most one run at a time and one waiting; extra triggers merge into the waiting one.
 concurrency:
   group: top10news-pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    outputs:
+      started: ${{ steps.clock.outputs.started }}
     environment:
       name: github-pages
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
+      - id: clock
+        run: echo "started=$(date +%s)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - name: Test
-        if: github.event_name != 'schedule'
+        if: github.event_name == 'push'
         run: npm test
       - name: Fetch previous data (keeps ranks and change history)
         run: curl -fsS "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/data/top10.json" -o "$RUNNER_TEMP/prev.json" || true
@@ -50,3 +56,21 @@ jobs:
         run: |
           echo "::error::${{ steps.build.outputs.down }} sources failed: ${{ steps.build.outputs.names }}"
           exit 1
+
+  # GitHub's cron trigger is best-effort and can go quiet for hours, so each run
+  # starts the next one 5 minutes after it began. The cron line above is a backup
+  # that restarts the chain if it ever breaks. Runs only queue, never pile up.
+  rearm:
+    needs: build-and-deploy
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for the 5-minute mark, then start the next run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STARTED: ${{ needs.build-and-deploy.outputs.started }}
+        run: |
+          now=$(date +%s)
+          wait=$(( 300 - (now - ${STARTED:-$now}) ))
+          [ "$wait" -gt 0 ] && [ "$wait" -le 300 ] && sleep "$wait"
+          gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main
