@@ -8,7 +8,7 @@ const { Aggregator } = require('./lib/aggregator');
 const { toRss } = require('./lib/feed');
 
 const PORT = Number(process.env.PORT) || 3000;
-const POLL_MS = (Number(process.env.POLL_SECONDS) || 120) * 1000;
+const POLL_MS = (Number(process.env.POLL_SECONDS) || 300) * 1000;
 const DEMO = process.env.DEMO === '1';
 const PUBLIC = path.join(__dirname, 'public');
 const SITE_URL = process.env.SITE_URL || '';

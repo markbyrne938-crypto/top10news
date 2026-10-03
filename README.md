@@ -5,12 +5,12 @@ Reuters, AP, AFP, BBC, NYT, The Washington Post, The Guardian, Al Jazeera, NPR, 
 place them. No dependencies — just Node 18+.
 
 ```
-npm start        # http://localhost:3000, polls real feeds every 120s
+npm start        # http://localhost:3000, polls real feeds every 5 minutes
 npm run demo     # fictional headlines that rotate, to see live updates offline
 npm test
 ```
 
-Env vars: `PORT` (3000), `POLL_SECONDS` (120), `DEMO=1`.
+Env vars: `PORT` (3000), `POLL_SECONDS` (300), `DEMO=1`.
 
 ## Putting it online
 **GitHub Pages (no server, free):** `.github/workflows/top10news.yml` rebuilds the site every 5 minutes on GitHub's
