@@ -32,6 +32,13 @@ Preview the static build locally: `DEMO=1 node scripts/build-static.js && npx se
 - `lib/aggregator.js` – refreshes, keeps story ids stable, diffs the top 10 and emits an `update` event when a story enters, leaves or moves.
 - `server.js` – serves `/api/top10` and a Server-Sent-Events stream at `/events`; the page (`public/`) updates instantly and flashes new entrants.
 
+## Tuning and testing
+- `test/samples/<name>/*.xml` are saved feed sets replayed through the whole pipeline by `npm test`.
+  `synthetic-1` is fictional (made by `test/make-synthetic.js`). To add a real one, run
+  `node scripts/capture-sample.js` on a machine with network access, check the result looks right, and commit it.
+- Each build warns about unreachable sources and fails the workflow run (GitHub emails the repo owner) when 3+ are down.
+- The page shows a banner if its data is more than 20 minutes old.
+
 ## Notes
 - Reuters and AP no longer publish official RSS feeds, and AFP content is syndicated, so those three are read through
   Google News RSS searches (`approx: true` in `sources.js`). Their position reflects Google's ordering, not the outlet's homepage.

@@ -1,0 +1,68 @@
+'use strict';
+// Replays every saved feed set in test/samples/* through the full pipeline.
+const test = require('node:test');
+const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
+const { SOURCES } = require('../lib/sources');
+const { Aggregator } = require('../lib/aggregator');
+
+const root = path.join(__dirname, 'samples');
+const dirs = fs.readdirSync(root).filter((d) => fs.statSync(path.join(root, d)).isDirectory());
+
+async function run(dir) {
+  const agg = new Aggregator({
+    sources: SOURCES,
+    now: () => Date.parse('2026-10-03T12:30:00Z'),
+    fetchText: async (s) => fs.readFileSync(path.join(root, dir, `${s.id}.xml`), 'utf8'),
+  });
+  return agg.refresh();
+}
+
+for (const dir of dirs) {
+  test(`sample ${dir}: general invariants`, async () => {
+    const snap = await run(dir);
+    assert.ok(snap.stories.length >= 5, 'enough stories');
+    const scores = snap.stories.map((s) => s.score);
+    assert.deepEqual(scores, [...scores].sort((a, b) => b - a), 'sorted by score');
+    const titles = snap.stories.map((s) => s.headline);
+    assert.equal(new Set(titles).size, titles.length, 'no duplicate headlines');
+    for (const s of snap.stories) {
+      assert.ok(s.items.length >= 1 && s.items.every((i) => /^https?:/.test(i.url)));
+      assert.equal(new Set(s.items.map((i) => i.source)).size, s.items.length, 'one item per source');
+      assert.ok(!/^(live|video|opinion)\b/i.test(s.headline), 'no format prefixes: ' + s.headline);
+      assert.ok(!/ - (Reuters|AP News|AFP)$/.test(s.headline), 'publisher suffix stripped: ' + s.headline);
+    }
+  });
+}
+
+test('synthetic-1: distinct events stay apart, same event merges', async () => {
+  const snap = await run('synthetic-1');
+  const all = [...snap.stories, ...snap.more];
+  const tam = all.find((s) => /Tamarinda/.test(s.headline));
+  const kal = all.find((s) => /Kaldoria/.test(s.headline));
+  assert.ok(tam && kal && tam.id !== kal.id, 'two different earthquakes are two stories');
+  assert.ok(tam.sourceCount >= 9, 'Tamarinda quake merged across sources, got ' + tam.sourceCount);
+  assert.ok(kal.sourceCount <= 3, 'Kaldoria quake did not absorb the other: ' + kal.sourceCount);
+  assert.equal(snap.stories[0].id, tam.id, 'most widely covered story is #1');
+});
+
+test('synthetic-1: noise is excluded and wire wording preferred', async () => {
+  const snap = await run('synthetic-1');
+  const text = JSON.stringify([...snap.stories, ...snap.more]);
+  assert.ok(!/commentisfree|\/football\/|nytimes\.com\/video/.test(text), 'opinion/sport/video dropped');
+  const tam = snap.stories.find((s) => /Tamarinda/.test(s.headline));
+  assert.equal(tam.items[0].kind, 'wire');
+  assert.ok(tam.summary.length > 0, 'summary comes from a direct feed, not a Google link list');
+  assert.ok(!/<|&nbsp;/.test(tam.summary));
+});
+
+test('synthetic-1: breakdown explains the score', async () => {
+  const snap = await run('synthetic-1');
+  for (const s of snap.stories) {
+    const sum = s.items.reduce((a, i) => a + i.points, 0);
+    assert.ok(Math.abs(sum - s.rawScore) < 0.05, 'points add up to rawScore');
+    assert.ok(Math.abs(s.rawScore * s.freshness - s.score) < 0.05);
+    assert.ok(s.topic && s.regions.length >= 1);
+  }
+});

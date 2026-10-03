@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How Top10News ranks stories</title>
+<meta name="description" content="Methodology, sources and limitations of Top10News.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="masthead"><div class="wrap">
+  <div class="dateline"><a href="./">← Back to the top 10</a></div>
+  <h1 class="nameplate"><a href="./">Top<i>10</i>News</a></h1>
+  <p class="tagline">The world's leading stories, ranked across its newsrooms</p>
+</div></header>
+<main class="article">
+  <h1>How we rank the news</h1>
+  <p>Top10News does not decide what matters. It measures what the world's leading newsrooms are choosing to lead with, and shows you that.</p>
+
+  <h2>The process</h2>
+  <ol>
+    <li><b>Read.</b> Every few minutes we read the headline feed of each source below, in the order the outlet itself presents it.</li>
+    <li><b>Clean.</b> Opinion, sport, culture and lifestyle sections, videos, podcasts and quizzes are set aside. "Live:" prefixes and publisher suffixes are trimmed from headlines.</li>
+    <li><b>Group.</b> Headlines that describe the same event are grouped. The match uses shared words, with names of people and places counting for more, so two earthquakes in different countries stay separate.</li>
+    <li><b>Score.</b> Each outlet that covers a story contributes <i>weight × placement</i>. A No. 1 placement earns the full weight; No. 5 earns about half; No. 10 about a third. The total is then reduced as the story ages (it halves roughly every 18 hours).</li>
+    <li><b>Rank.</b> Stories reported by two or more outlets always rank above single-outlet stories. The top ten are shown in score order; the next fifteen appear under "Also in the news".</li>
+  </ol>
+  <p>Every card has a "How this ranked" panel showing the exact points each outlet contributed.</p>
+
+  <h2>Sources</h2>
+  <table id="srcTable"><thead><tr><th>Outlet</th><th>Region</th><th>Type</th><th>Weight</th></tr></thead><tbody></tbody></table>
+  <p>Wire services carry the highest weight because most other newsrooms build on their reporting. Their weight is a judgement call, and you can change it in <code>lib/sources.js</code>.</p>
+
+  <h2>Bias and balance</h2>
+  <p>We try to reduce bias in three ways: we draw on outlets from several countries, we rank by agreement between them instead of by editorial opinion, and we use the wire services' wording for headlines where we can. Each card also shows which regions are reporting a story, and marks stories that so far only appear in one region.</p>
+  <p>This does not remove bias. All sources here are English-language, most are Western, and every newsroom's choice of what to lead with reflects its audience. If something important to you is missing, that may be why.</p>
+
+  <h2>Known limitations</h2>
+  <ul>
+    <li>Reuters and AP no longer offer official feeds, and AFP content is syndicated across many sites. We read those three through Google News searches, so their "placement" reflects Google's ordering rather than their own front pages. They are marked as approximate in the code.</li>
+    <li>Grouping is automatic and sometimes wrong: it can split one story in two or, rarely, join two. Topic labels (Politics, Conflict and so on) are assigned by keywords and are only a guide.</li>
+    <li>Rankings update every few minutes, not instantly. If this page's data is more than 20 minutes old it says so at the top.</li>
+  </ul>
+
+  <h2>Use of content</h2>
+  <p>We show headlines, the short summaries publishers include in their feeds, and links. Articles and trademarks belong to their publishers, and we are not affiliated with any of them.</p>
+</main>
+<script>
+(async () => {
+  let d;
+  try { d = await (await fetch('api/top10')).json(); } catch { try { d = await (await fetch('data/top10.json')).json(); } catch { return; } }
+  const tb = document.querySelector('#srcTable tbody');
+  for (const s of d.sources || []) {
+    const tr = document.createElement('tr');
+    [s.name + (s.approx ? ' *' : ''), s.region, s.kind === 'wire' ? 'Wire service' : 'Newsroom', s.weight.toFixed(1)].forEach((t) => { const td = document.createElement('td'); td.textContent = t; tr.appendChild(td); });
+    tb.appendChild(tr);
+  }
+  const note = document.createElement('p'); note.className = 'small'; note.textContent = '* Read via Google News; position is approximate.';
+  tb.parentNode.after(note);
+})();
+</script>
+</body>
+</html>

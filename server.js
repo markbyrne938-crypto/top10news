@@ -5,12 +5,14 @@ const fs = require('fs');
 const path = require('path');
 const { SOURCES } = require('./lib/sources');
 const { Aggregator } = require('./lib/aggregator');
+const { toRss } = require('./lib/feed');
 
 const PORT = Number(process.env.PORT) || 3000;
 const POLL_MS = (Number(process.env.POLL_SECONDS) || 120) * 1000;
 const DEMO = process.env.DEMO === '1';
 const PUBLIC = path.join(__dirname, 'public');
-const TYPES = { '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
+const SITE_URL = process.env.SITE_URL || '';
+const TYPES = {'.xml': 'application/rss+xml', '.png': 'image/png',  '.html': 'text/html; charset=utf-8', '.css': 'text/css', '.js': 'text/javascript', '.svg': 'image/svg+xml', '.ico': 'image/x-icon' };
 
 const agg = new Aggregator(
   DEMO ? { sources: SOURCES, fetchText: require('./lib/demo').makeDemoFetch() } : { sources: SOURCES }
@@ -36,6 +38,10 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
     return res.end(JSON.stringify(payload()));
   }
+  if (url.pathname === '/feed.xml') {
+    res.writeHead(200, { 'Content-Type': 'application/rss+xml; charset=utf-8', 'Cache-Control': 'no-cache' });
+    return res.end(toRss(agg.publicSnapshot(), SITE_URL));
+  }
   if (url.pathname === '/events') {
     res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
     res.write(`event: hello\ndata: ${JSON.stringify(payload())}\n\n`);
@@ -48,7 +54,7 @@ const server = http.createServer((req, res) => {
   fs.readFile(file, (err, data) => {
     if (err) { res.writeHead(404); return res.end('Not found'); }
     res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream' });
-    res.end(data);
+    res.end(path.extname(file) === '.html' ? data.toString().replace(/__SITE_URL__\/?/g, SITE_URL ? SITE_URL.replace(/\/?$/, '/') : '') : data);
   });
 });
 

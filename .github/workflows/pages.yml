@@ -29,12 +29,15 @@ jobs:
         with:
           node-version: 22
       - name: Test
+        if: github.event_name != 'schedule'
         run: npm test
       - name: Fetch previous data (keeps ranks and change history)
         run: curl -fsS "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/data/top10.json" -o "$RUNNER_TEMP/prev.json" || true
       - name: Build
+        id: build
         env:
           PREV_JSON: ${{ runner.temp }}/prev.json
+          SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
         run: node scripts/build-static.js
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
@@ -42,3 +45,8 @@ jobs:
           path: dist
       - id: deploy
         uses: actions/deploy-pages@v4
+      - name: Alert if sources are down
+        if: steps.build.outputs.down >= 3
+        run: |
+          echo "::error::${{ steps.build.outputs.down }} sources failed: ${{ steps.build.outputs.names }}"
+          exit 1

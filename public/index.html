@@ -3,34 +3,69 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Top10News — the world's top stories, ranked across sources</title>
-<meta name="description" content="The 10 biggest world news stories right now, ranked by how prominently Reuters, AP, AFP, BBC, NYT, Washington Post and others place them.">
+<title>Top10News — the world's ten biggest stories, ranked across newsrooms</title>
+<meta name="description" content="The ten biggest world news stories right now, ranked by how prominently Reuters, AP, AFP, the BBC, the New York Times, the Washington Post and others lead with them.">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="alternate" type="application/rss+xml" title="Top10News" href="feed.xml">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Top10News">
+<meta property="og:title" content="Top10News — the world's ten biggest stories">
+<meta property="og:description" content="Ranked by how prominently the world's leading newsrooms lead with them. Updated every few minutes.">
+<meta property="og:image" content="__SITE_URL__og.png">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header class="top">
-  <div class="wrap bar">
-    <h1><span class="logo">Top<b>10</b>News</span></h1>
-    <div class="live" id="live" role="status"><span class="dot"></span><span id="liveText">Connecting…</span></div>
+<a class="skip" href="#content">Skip to the stories</a>
+
+<header class="masthead">
+  <div class="wrap">
+    <div class="dateline">
+      <span id="today"></span>
+      <span id="updated" class="status" role="status">Loading…</span>
+    </div>
+    <h1 class="nameplate"><a href="./">Top<i>10</i>News</a></h1>
+    <p class="tagline">The world's leading stories, ranked across its newsrooms</p>
+  </div>
+  <div class="wrap">
+    <nav class="sections" aria-label="Sections">
+      <div id="topics"></div>
+      <label class="region">Covered by
+        <select id="region"><option value="">any region</option></select>
+      </label>
+    </nav>
   </div>
 </header>
-<div id="demoBanner" class="demo" hidden>DEMO MODE — fictional headlines, not real news.</div>
-<main class="wrap">
-  <p class="lede">The ten biggest stories in the world right now, ranked by how prominently leading wire services and newsrooms place them. Updates automatically.</p>
-  <p id="error" class="error" hidden></p>
-  <ol id="list" class="stories" aria-live="polite"></ol>
-  <section class="side">
-    <h2>Recent changes</h2>
-    <ul id="events" class="events"><li class="muted">Nothing yet.</li></ul>
-  </section>
-  <section class="about">
-    <h2>How stories are ranked</h2>
-    <p>Every couple of minutes we read the headline feeds of Reuters, Associated Press, AFP, BBC News, The New York Times, The Washington Post, The Guardian, Al Jazeera, NPR, Deutsche Welle and France 24. Headlines about the same event are grouped together. A story's score is the sum, across every source covering it, of that source's weight times how high it places the story (wire services count most). Stories reported by several independent sources outrank single-source items, and older stories gradually fade.</p>
-    <p>Each card shows the wire service's wording where available and links to every outlet's own report, so you can compare coverage directly. We show only headlines, short feed summaries and links.</p>
-    <h2>Source status</h2>
-    <ul id="sources" class="sources"></ul>
-  </section>
+
+<div id="banner" class="banner" hidden></div>
+
+<main class="wrap page" id="content">
+  <div class="primary" id="stories" aria-live="polite"><p class="loading">Loading the latest stories…</p></div>
+
+  <aside class="rail">
+    <section>
+      <h2 class="rail-h">Changes to the top 10</h2>
+      <ul id="events" class="changes"><li class="muted">No changes since this page opened.</li></ul>
+    </section>
+    <section>
+      <h2 class="rail-h">Stay informed</h2>
+      <p class="small">New stories enter the top 10 as newsrooms shift their leads.</p>
+      <p><button type="button" id="alerts" class="btn">Alert me to new entries</button></p>
+      <p class="small" id="alertNote"></p>
+      <p class="small"><a href="feed.xml">RSS feed</a> · <a href="about.html">How we rank</a></p>
+    </section>
+    <section>
+      <h2 class="rail-h">Sources read</h2>
+      <ul id="sources" class="sources"></ul>
+    </section>
+  </aside>
 </main>
+
+<footer class="foot">
+  <div class="wrap">
+    <p>Top10News ranks stories; it does not write them. We show headlines, the short summaries publishers put in their feeds, and links. Every article belongs to its publisher. <a href="about.html">Methodology and limitations</a>.</p>
+  </div>
+</footer>
 <script src="app.js"></script>
 </body>
 </html>
