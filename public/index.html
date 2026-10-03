@@ -13,7 +13,12 @@
 <meta property="og:description" content="Ranked by how prominently the world's leading newsrooms lead with them. Updated every few minutes.">
 <meta property="og:image" content="__SITE_URL__og.png">
 <meta name="twitter:card" content="summary_large_image">
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#fbfaf6" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#151413" media="(prefers-color-scheme: dark)">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="stylesheet" href="style.css">
+<script>try{var t=localStorage.getItem("top10news.theme");if(t)document.documentElement.dataset.theme=t;var z=localStorage.getItem("top10news.zoom");if(z)document.documentElement.dataset.zoom=z}catch(e){}</script>
 </head>
 <body>
 <a class="skip" href="#content">Skip to the stories</a>
@@ -28,19 +33,27 @@
     <p class="tagline">The world's leading stories, ranked across its newsrooms</p>
   </div>
   <div class="wrap">
-    <nav class="sections" aria-label="Sections">
-      <div id="topics"></div>
+    <nav class="sections" aria-label="Sections"><div id="topics"></div></nav>
+    <div class="toolbar" role="search">
+      <label class="sr-only" for="q">Search these stories</label>
+      <input id="q" type="search" placeholder="Search stories, places, outlets…  ( / )" autocomplete="off">
       <label class="region">Covered by
         <select id="region"><option value="">any region</option></select>
       </label>
-    </nav>
+      <span class="tool-group">
+        <button type="button" class="tool" id="smaller" aria-label="Smaller text" title="Smaller text">A−</button>
+        <button type="button" class="tool" id="larger" aria-label="Larger text" title="Larger text">A+</button>
+        <button type="button" class="tool" id="theme" title="Switch between automatic, dark and light">Theme: auto</button>
+        <button type="button" class="tool" id="refresh" title="Check for new stories now">Refresh</button>
+      </span>
+    </div>
   </div>
 </header>
 
 <div id="banner" class="banner" hidden></div>
 
 <main class="wrap page" id="content">
-  <div class="primary" id="stories" aria-live="polite"><p class="loading">Loading the latest stories…</p></div>
+  <div class="primary" id="stories" aria-live="polite"><p class="loading">Loading the latest stories…</p><noscript><p class="loading">Top10News needs JavaScript to show the stories. You can also follow them with the <a href="feed.xml">RSS feed</a>.</p></noscript></div>
 
   <aside class="rail">
     <section>
@@ -53,6 +66,7 @@
       <p><button type="button" id="alerts" class="btn">Alert me to new entries</button></p>
       <p class="small" id="alertNote"></p>
       <p class="small"><a href="feed.xml">RSS feed</a> · <a href="about.html">How we rank</a></p>
+      <p class="small"><b>Bold</b> outlet names are wire services (Reuters, AP, AFP). Their reporting feeds most other newsrooms.</p>
     </section>
     <section>
       <h2 class="rail-h">Sources read</h2>
@@ -63,6 +77,7 @@
 
 <footer class="foot">
   <div class="wrap">
+    <p><a href="#content">Back to top</a></p>
     <p>Top10News ranks stories; it does not write them. We show headlines, the short summaries publishers put in their feeds, and links. Every article belongs to its publisher. <a href="about.html">Methodology and limitations</a>.</p>
   </div>
 </footer>

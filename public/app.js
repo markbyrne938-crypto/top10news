@@ -8,13 +8,18 @@ const store = {
 };
 const TOPICS = ['Top 10', 'World', 'Politics', 'Conflict', 'Business', 'Technology', 'Science & climate', 'Health', 'Disasters'];
 const STALE_MIN = 20;
+const SHOW_OUTLETS = 5;
 
 let data = null;
-let lastIds = null;
-let topic = decodeURIComponent(location.hash.slice(1)) || 'Top 10';
-let region = '';
+let lastIds = null;      // ids from the previous update, to spot new entrants while the page is open
+let sinceVisit = null;   // ids that were not in the top 10 when the reader last visited
 let changeLog = [];
+let topic = 'Top 10';
+let region = '';
+let query = '';
+let loadError = false;
 
+/* ---------- helpers ---------- */
 function ago(ms) {
   const m = Math.max(0, Math.round((Date.now() - ms) / 60000));
   if (m < 2) return 'just now';
@@ -25,14 +30,13 @@ function ago(ms) {
   return `${d} day${d === 1 ? '' : 's'} ago`;
 }
 const clock = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-/* ---------- story pieces ---------- */
 function link(it, text) {
   const a = el('a', null, text || it.sourceName);
-  a.href = safeUrl(it.url); a.target = '_blank'; a.rel = 'noopener noreferrer'; a.title = it.title;
+  a.href = safeUrl(it.url); a.target = '_blank'; a.rel = 'noopener noreferrer'; a.title = `${it.sourceName}: ${it.title}`;
   return a;
 }
 
+/* ---------- story pieces ---------- */
 // Key points taken from the outlets' own feed summaries, each credited to the outlets that say it.
 function pointsEl(s) {
   if (!s.points || !s.points.length) return s.summary ? el('p', 'stand', s.summary) : null;
@@ -57,23 +61,54 @@ function differEl(s) {
 function readMoreEl(s) {
   const p = el('p', 'more');
   p.append('Read more at ');
-  s.items.forEach((it, i) => {
+  const nodes = s.items.map((it) => {
     const a = link(it);
-    if (it.kind === 'wire') { const b = el('b'); b.appendChild(a); p.append(b); } else p.append(a);
-    if (i < s.items.length - 1) p.append(' · ');
+    if (it.kind !== 'wire') return a;
+    const b = el('b'); b.appendChild(a); return b;
   });
+  const put = (list) => list.forEach((n, i) => { if (i) p.append(' · '); p.append(n); });
+  const rest = nodes.length - SHOW_OUTLETS;
+  if (rest <= 1) { put(nodes); return p; }
+  put(nodes.slice(0, SHOW_OUTLETS));
+  const btn = el('button', null, `all ${nodes.length} outlets`);
+  btn.type = 'button';
+  btn.addEventListener('click', () => {
+    btn.remove();
+    nodes.slice(SHOW_OUTLETS).forEach((n) => { p.append(' · '); p.append(n); });
+  });
+  p.append(' · ', btn);
   return p;
 }
 
 function metaEl(s) {
   const p = el('p', 'by');
-  p.append(`${s.sourceCount} source${s.sourceCount === 1 ? '' : 's'}`);
-  if (s.published) p.append(` · ${ago(s.published)}`);
-  if (s.regions.length === 1 && s.sourceCount > 1) {
+  p.append(`${s.sourceCount} outlets`);
+  if (s.published) {
+    p.append(' · ');
+    const t = el('span', null, ago(s.published));
+    t.title = new Date(s.published).toLocaleString();
+    p.append(t);
+  }
+  if (s.regions.length === 1) {
     p.append(' · ');
     p.append(el('span', 'flag', `Only outlets in ${s.regions[0]} so far`));
   }
+  p.append(' · ');
+  const share = el('button', 'share', 'Share');
+  share.type = 'button';
+  share.addEventListener('click', () => shareStory(s, share));
+  p.append(share);
   return p;
+}
+
+async function shareStory(s, btn) {
+  const url = location.origin + location.pathname + '#story-' + s.id;
+  try {
+    if (navigator.share) { await navigator.share({ title: s.headline, url }); return; }
+    await navigator.clipboard.writeText(url);
+    btn.textContent = 'Link copied';
+  } catch { btn.textContent = 'Copy the page address to share'; }
+  setTimeout(() => { btn.textContent = 'Share'; }, 2500);
 }
 
 function whyEl(s) {
@@ -86,10 +121,7 @@ function whyEl(s) {
   const body = el('tbody');
   for (const it of s.items) {
     const tr = el('tr');
-    const td = el('td');
-    const a = el('a', null, it.sourceName);
-    a.href = safeUrl(it.url); a.target = '_blank'; a.rel = 'noopener noreferrer';
-    td.appendChild(a);
+    const td = el('td'); td.appendChild(link(it));
     tr.append(td, el('td', null, it.region), el('td', null, `No. ${it.position}`), el('td', null, it.points.toFixed(2)));
     body.appendChild(tr);
   }
@@ -99,11 +131,11 @@ function whyEl(s) {
   return d;
 }
 
-function kickerEl(s, label) {
+function kickerEl(s, withRank) {
   const k = el('p', 'kicker');
-  if (label === '') k.append(s.topic); // list rows already show their number
-  else k.append(`No. ${s.rank} · ${s.topic}`);
+  k.append(withRank ? `No. ${s.rank} · ${s.topic}` : s.topic);
   if (s.isNew) k.append(el('span', 'where', ' · New to the top 10'));
+  else if (sinceVisit && sinceVisit.has(s.id)) k.append(el('span', 'where since', ' · New since your last visit'));
   else if (s.previousRank && s.previousRank !== s.rank) {
     k.append(el('span', 'where', s.previousRank > s.rank ? ` · Up from No. ${s.previousRank}` : ` · Down from No. ${s.previousRank}`));
   }
@@ -112,6 +144,7 @@ function kickerEl(s, label) {
 
 function storyEl(s, variant, flashIds) {
   const outer = el('article', `story story--${variant}${flashIds.has(s.id) ? ' flash' : ''}`);
+  outer.id = 'story-' + s.id;
   let art = outer;
   if (variant === 'lead' || variant === 'second') { // ranks 1-3 get a large numeral
     outer.classList.add('numbered');
@@ -119,11 +152,9 @@ function storyEl(s, variant, flashIds) {
     art = el('div', 'body');
     outer.appendChild(art);
   }
-  art.appendChild(kickerEl(s, ''));
+  art.appendChild(kickerEl(s, variant === 'result'));
   const h = el(variant === 'lead' ? 'h2' : 'h3');
-  const a = el('a', null, s.headline);
-  a.href = safeUrl(s.items[0].url); a.target = '_blank'; a.rel = 'noopener noreferrer';
-  h.appendChild(a);
+  h.appendChild(link(s.items[0], s.headline));
   art.appendChild(h);
   for (const part of [pointsEl(s), differEl(s), readMoreEl(s), metaEl(s), whyEl(s)]) if (part) art.appendChild(part);
   return outer;
@@ -131,48 +162,60 @@ function storyEl(s, variant, flashIds) {
 
 function compactEl(s) {
   const li = el('li');
+  li.id = 'story-' + s.id;
   li.appendChild(el('span', 'n', String(s.rank)));
   const box = el('div');
-  const a = el('a', null, s.headline);
-  a.href = safeUrl(s.items[0].url); a.target = '_blank'; a.rel = 'noopener noreferrer';
-  box.appendChild(a);
-  const by = el('span', 'by', `${s.topic} · ${s.sourceCount} source${s.sourceCount === 1 ? '' : 's'}`);
-  box.appendChild(by);
+  box.appendChild(link(s.items[0], s.headline));
+  box.appendChild(el('span', 'by', `${s.topic} · ${s.sourceCount} outlets`));
   li.appendChild(box);
   return li;
 }
 
 /* ---------- page ---------- */
-function renderStories(flashIds) {
-  const root = $('stories');
-  const all = [...data.stories, ...(data.more || [])];
-  const pass = (s) => (!region || s.regions.includes(region));
-  const nodes = [];
+function matches(s) {
+  if (region && !s.regions.includes(region)) return false;
+  if (topic !== 'Top 10' && topic !== 'World' && s.topic !== topic) return false;
+  if (query) {
+    const hay = [s.headline, s.topic, ...(s.points || []).map((p) => p.text), ...s.items.map((i) => i.sourceName + ' ' + i.title)].join(' ').toLowerCase();
+    return query.toLowerCase().split(/\s+/).every((w) => hay.includes(w));
+  }
+  return true;
+}
 
-  if (topic === 'Top 10' ) {
-    const top = data.stories.filter(pass);
+function renderStories(flashIds = new Set()) {
+  const root = $('stories');
+  if (!data) {
+    root.replaceChildren(loadError ? errorEl() : el('p', 'loading', 'Loading the latest stories…'));
+    return;
+  }
+  const all = [...data.stories, ...(data.more || [])];
+  const nodes = [];
+  const filtered = topic !== 'Top 10' || query;
+
+  if (!filtered) {
+    const top = data.stories.filter(matches);
     const [lead, ...others] = top;
     if (!region && data.stories.length < 10) {
       nodes.push(el('p', 'small thin', data.stories.length
         ? `Showing ${data.stories.length} stories. Only stories reported by at least three outlets are published.`
         : 'No story is reported by three outlets yet. Check back shortly.'));
     }
-    if (!top.length) nodes.push(el('p', 'empty', 'No top-10 stories are covered by outlets in that region right now.'));
+    if (!top.length && region) nodes.push(el('p', 'empty', 'No top-10 stories are covered by outlets in that region right now.'));
     if (lead) nodes.push(storyEl(lead, 'lead', flashIds));
     if (others.length) {
       const pair = el('div', 'pair');
       others.slice(0, 2).forEach((s) => pair.appendChild(storyEl(s, 'second', flashIds)));
       nodes.push(pair);
-      const ol = el('div');
+      const rows = el('div');
       others.slice(2).forEach((s) => {
         const row = el('div', 'row');
         row.appendChild(el('div', 'num', String(s.rank)));
         row.appendChild(storyEl(s, 'row', flashIds));
-        ol.appendChild(row);
+        rows.appendChild(row);
       });
-      nodes.push(ol);
+      nodes.push(rows);
     }
-    const more = (data.more || []).filter(pass);
+    const more = (data.more || []).filter(matches);
     if (more.length) {
       nodes.push(el('h2', 'section-h', 'Also in the news'));
       const ul = el('ul', 'compact');
@@ -180,20 +223,31 @@ function renderStories(flashIds) {
       nodes.push(ul);
     }
   } else {
-    const list = all.filter((s) => (topic === 'World' || s.topic === topic) && pass(s));
-    nodes.push(el('h2', 'section-h', `${topic}: where the ten leading stories and the next fifteen overlap`));
-    if (!list.length) nodes.push(el('p', 'empty', `Nothing in ${topic} is among the top 25 stories right now.`));
-    const ul = el('ul', 'compact');
-    list.forEach((s) => ul.appendChild(compactEl(s)));
-    nodes.push(ul);
+    const list = all.filter(matches);
+    const what = query ? `Results for “${query}”` : topic;
+    nodes.push(el('h2', 'view-h', what));
+    nodes.push(el('p', 'view-n', `${list.length} of the ${all.length} leading stories${region ? ` covered by outlets in ${region}` : ''}`));
+    if (!list.length) nodes.push(el('p', 'empty', 'Nothing matches. Try a different word, topic or region.'));
+    list.forEach((s) => nodes.push(storyEl(s, 'result', flashIds)));
   }
   root.replaceChildren(...nodes);
+}
+
+function errorEl() {
+  const box = el('div', 'empty');
+  box.appendChild(el('p', null, 'We could not load the latest stories. Check your connection and try again.'));
+  const b = el('button', 'btn retry', 'Try again');
+  b.type = 'button';
+  b.addEventListener('click', refreshNow);
+  box.appendChild(b);
+  return box;
 }
 
 function renderTopics() {
   $('topics').replaceChildren(...TOPICS.map((t) => {
     const a = el('a', null, t);
-    a.href = '#' + encodeURIComponent(t);
+    a.href = t === 'Top 10' ? location.pathname : '?topic=' + encodeURIComponent(t);
+    a.dataset.topic = t;
     if (t === topic) a.setAttribute('aria-current', 'true');
     return a;
   }));
@@ -214,16 +268,17 @@ function renderRail() {
     li.append(`${c.headline} — ${verb}`);
     return li;
   });
-  $('events').replaceChildren(...(items.length ? items : [el('li', 'muted', 'No changes since this page opened.')]));
+  $('events').replaceChildren(...(items.length ? items : [el('li', 'muted', 'No changes recorded yet.')]));
   $('sources').replaceChildren(...(data.sources || []).map((s) => el('li', s.ok ? '' : 'bad', s.name)));
 }
 
 function renderStatus() {
   const st = $('updated');
   const banner = $('banner');
+  if (!data) { st.className = 'status'; st.textContent = loadError ? 'Offline' : 'Loading…'; return; }
   const ageMin = data.updatedAt ? (Date.now() - data.updatedAt) / 60000 : Infinity;
   st.className = 'status' + (ageMin < STALE_MIN ? ' live' : '');
-  st.textContent = data.updatedAt ? `Updated ${clock(data.updatedAt)}${data.static ? '' : ' · live'}` : 'Waiting for the first update';
+  st.textContent = data.updatedAt ? `Updated ${clock(data.updatedAt)} (${ago(data.updatedAt)})` : 'Waiting for the first update';
   let msg = '', warn = false;
   if (data.demo) msg = 'Demonstration mode: these headlines are fictional.';
   else if (data.error) { msg = `${data.error}. Showing the last stories we had.`; warn = true; }
@@ -234,15 +289,39 @@ function renderStatus() {
 }
 
 function render(d, changes = []) {
-  data = d;
+  data = d; loadError = false;
   const entered = changes.filter((c) => c.type === 'entered');
-  const fresh = (d.events || []).filter((e) => !changeLog.some((c) => c.at === e.at && c.id === e.id && c.type === e.type));
-  if (lastIds === null) changeLog = (d.events || []).slice();
-  else changeLog = [...fresh, ...changeLog].slice(0, 30);
+  if (lastIds === null) {
+    changeLog = (d.events || []).slice();
+    // "New since your last visit": compare with the ids saved when the reader was last here.
+    try {
+      const seen = JSON.parse(store.get('top10news.seen') || 'null');
+      if (seen && Array.isArray(seen.ids) && Date.now() - seen.at < 7 * 864e5) {
+        const old = new Set(seen.ids);
+        sinceVisit = new Set(d.stories.filter((s) => !old.has(s.id)).map((s) => s.id));
+        if (sinceVisit.size === d.stories.length) sinceVisit = null; // everything is new: not informative
+      }
+    } catch {}
+  } else {
+    const fresh = (d.events || []).filter((e) => !changeLog.some((c) => c.at === e.at && c.id === e.id && c.type === e.type));
+    changeLog = [...fresh, ...changeLog].slice(0, 30);
+  }
+  store.set('top10news.seen', JSON.stringify({ ids: [...d.stories, ...(d.more || [])].map((s) => s.id), at: Date.now() }));
   renderTopics(); renderRegions(); renderStatus(); renderRail();
   renderStories(new Set(entered.map((c) => c.id)));
   if (lastIds !== null && entered.length) notify(entered);
   lastIds = d.stories.map((s) => s.id);
+  jumpToHash();
+}
+
+function jumpToHash() {
+  const m = location.hash.match(/^#(story-[\w-]+)$/);
+  const target = m && document.getElementById(m[1]);
+  if (target && !target.dataset.jumped) {
+    target.dataset.jumped = '1';
+    target.classList.add('flash');
+    target.scrollIntoView({ block: 'center' });
+  }
 }
 
 /* ---------- alerts ---------- */
@@ -262,38 +341,102 @@ $('alerts').addEventListener('click', async () => {
 });
 function notify(entered) {
   if (!alertsOn()) return;
-  const s = data.stories.find((x) => x.id === entered[0].id);
   new Notification(`New in the top 10 at No. ${entered[0].rank}`, { body: entered[0].headline + (entered.length > 1 ? ` (+${entered.length - 1} more)` : ''), tag: 'top10news' });
-  if (s) document.title = `(${entered.length}) Top10News`;
 }
 
-/* ---------- filters ---------- */
-window.addEventListener('hashchange', () => { topic = decodeURIComponent(location.hash.slice(1)) || 'Top 10'; if (data) { renderTopics(); renderStories(new Set()); } });
-$('region').addEventListener('change', (e) => { region = e.target.value; if (data) renderStories(new Set()); });
-document.addEventListener('visibilitychange', () => { if (!document.hidden) document.title = "Top10News — the world's ten biggest stories, ranked across newsrooms"; });
+/* ---------- routing, search and display settings ---------- */
+function readUrl() {
+  const p = new URLSearchParams(location.search);
+  const t = p.get('topic');
+  topic = TOPICS.includes(t) ? t : 'Top 10';
+}
+function setTopic(t) {
+  topic = t;
+  history.pushState(null, '', t === 'Top 10' ? location.pathname : '?topic=' + encodeURIComponent(t));
+  renderTopics(); renderStories();
+  window.scrollTo({ top: 0 });
+}
+$('topics').addEventListener('click', (e) => {
+  const a = e.target.closest('a[data-topic]');
+  if (!a || e.metaKey || e.ctrlKey || e.shiftKey) return;
+  e.preventDefault(); setTopic(a.dataset.topic);
+});
+window.addEventListener('popstate', () => { readUrl(); if (data) { renderTopics(); renderStories(); } });
+$('region').addEventListener('change', (e) => { region = e.target.value; renderStories(); });
+let timer;
+$('q').addEventListener('input', (e) => { clearTimeout(timer); timer = setTimeout(() => { query = e.target.value.trim(); renderStories(); }, 150); });
+document.addEventListener('keydown', (e) => {
+  const typing = /^(INPUT|SELECT|TEXTAREA)$/.test(document.activeElement.tagName);
+  if (e.key === '/' && !typing) { e.preventDefault(); $('q').focus(); }
+  else if (e.key === 'Escape' && document.activeElement === $('q')) { $('q').value = ''; query = ''; $('q').blur(); renderStories(); }
+});
+
+const THEMES = ['', 'dark', 'light'];
+function paintTheme() {
+  const t = document.documentElement.dataset.theme || '';
+  $('theme').textContent = 'Theme: ' + (t || 'auto');
+}
+$('theme').addEventListener('click', () => {
+  const next = THEMES[(THEMES.indexOf(document.documentElement.dataset.theme || '') + 1) % THEMES.length];
+  if (next) document.documentElement.dataset.theme = next; else delete document.documentElement.dataset.theme;
+  store.set('top10news.theme', next);
+  paintTheme();
+});
+function zoom(delta) {
+  const z = Math.max(-1, Math.min(2, Number(document.documentElement.dataset.zoom || 0) + delta));
+  document.documentElement.dataset.zoom = String(z);
+  store.set('top10news.zoom', String(z));
+}
+$('larger').addEventListener('click', () => zoom(1));
+$('smaller').addEventListener('click', () => zoom(-1));
 
 /* ---------- data ---------- */
 async function pollStatic() {
   try {
-    const d = await (await fetch('data/top10.json', { cache: 'no-store' })).json();
+    const res = await fetch('data/top10.json', { cache: 'no-store' });
+    if (!res.ok) throw new Error(res.status);
+    const d = await res.json();
     const before = new Set(lastIds || []);
     const changes = lastIds ? d.stories.filter((s) => !before.has(s.id)).map((s) => ({ type: 'entered', id: s.id, headline: s.headline, rank: s.rank })) : [];
     render(d, changes);
-  } catch { $('updated').textContent = 'Offline — retrying'; $('updated').className = 'status'; }
+  } catch {
+    loadError = true;
+    if (!data) renderStories();
+    renderStatus();
+    if (data) { $('updated').textContent = 'Offline — showing the last stories we had'; $('updated').className = 'status'; }
+  }
 }
+let serverMode = false;
+async function refreshNow() {
+  const b = $('refresh');
+  b.setAttribute('aria-busy', 'true'); b.textContent = 'Checking…';
+  try {
+    if (serverMode) { const d = await (await fetch('api/top10')).json(); render(d, []); } else await pollStatic();
+  } catch { loadError = true; renderStatus(); }
+  b.removeAttribute('aria-busy'); b.textContent = 'Refresh';
+}
+$('refresh').addEventListener('click', refreshNow);
+
 function connectSSE() {
   const es = new EventSource('events');
   es.addEventListener('hello', (e) => render(JSON.parse(e.data)));
   es.addEventListener('update', (e) => { const d = JSON.parse(e.data); render(d, d.changes); });
   es.onerror = () => { $('updated').textContent = 'Reconnecting…'; $('updated').className = 'status'; };
 }
+
 async function start() {
+  readUrl();
   $('today').textContent = new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  paintAlertButton();
-  let hasServer = false;
-  try { hasServer = !!window.EventSource && (await fetch('api/top10')).ok; } catch {}
-  if (hasServer) connectSSE();
-  else { pollStatic(); setInterval(pollStatic, 60000); document.addEventListener('visibilitychange', () => { if (!document.hidden) pollStatic(); }); }
+  paintAlertButton(); paintTheme(); renderTopics();
+  try { serverMode = !!window.EventSource && (await fetch('api/top10')).ok; } catch {}
+  if (serverMode) connectSSE();
+  else {
+    pollStatic(); setInterval(pollStatic, 60000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) pollStatic(); });
+  }
   setInterval(() => { if (data) renderStatus(); }, 60000);
+  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
 }
 start();
