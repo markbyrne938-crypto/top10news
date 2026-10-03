@@ -40,10 +40,12 @@ test('synthetic-1: distinct events stay apart, same event merges', async () => {
   const snap = await run('synthetic-1');
   const all = [...snap.stories, ...snap.more];
   const tam = all.find((s) => /Tamarinda/.test(s.headline));
-  const kal = all.find((s) => /Kaldoria/.test(s.headline));
-  assert.ok(tam && kal && tam.id !== kal.id, 'two different earthquakes are two stories');
+  assert.ok(tam, 'Tamarinda quake is listed');
   assert.ok(tam.sourceCount >= 9, 'Tamarinda quake merged across sources, got ' + tam.sourceCount);
-  assert.ok(kal.sourceCount <= 3, 'Kaldoria quake did not absorb the other: ' + kal.sourceCount);
+  // The Kaldoria quake is covered by only 2 outlets, so it is not published, and it must not have been absorbed into the other quake.
+  assert.ok(!all.some((s) => /Kaldoria/.test(s.headline)), 'two-outlet story is not published');
+  assert.ok(!tam.items.some((i) => /Kaldoria/.test(i.title)), 'Kaldoria headlines were not merged into the Tamarinda story');
+  assert.ok(all.every((s) => s.sourceCount >= 3));
   assert.equal(snap.stories[0].id, tam.id, 'most widely covered story is #1');
 });
 

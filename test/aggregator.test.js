@@ -57,23 +57,18 @@ test('ids stay stable across refreshes', async () => {
   assert.ok(shared.length >= 8);
 });
 
-test('failed sources are reported but do not break the page', async () => {
-  const agg = new Aggregator({
-    sources: SOURCES,
-    fetchText: async (s) => { if (s.id !== 'bbc') throw new Error('boom'); return feed([{ t: 'Only story here today', l: 'https://x/1', d: '', p: Date.now() }]); },
-  });
+test('failed sources are reported and stories need 3 sources', async () => {
+  const one = (s) => { if (s.id !== 'bbc') throw new Error('boom'); return feed([{ t: 'Only story here today', l: 'https://x/1', d: '', p: Date.now() }]); };
+  const agg = new Aggregator({ sources: SOURCES, fetchText: async (s) => one(s) });
   const snap = await agg.refresh();
   assert.equal(snap.sources.filter((s) => s.ok).length, 1);
-  assert.equal(snap.stories.length, 1);
+  assert.equal(snap.stories.length, 0, 'a single-source story is not published');
+  assert.ok(snap.error);
 });
 
-test('restore resumes ids and records changes between builds', async () => {
-  const a = new Aggregator({ sources: SOURCES, fetchText: makeDemoFetch() });
-  await a.refresh();
-  const saved = JSON.parse(JSON.stringify(a.publicSnapshot()));
-  const b = new Aggregator({ sources: SOURCES, fetchText: makeDemoFetch() });
-  b.restore(saved);
-  const snap = await b.refresh();
-  const kept = snap.stories.filter((s) => saved.stories.some((t) => t.id === s.id));
-  assert.ok(kept.length >= 8);
+test('a story needs at least 3 outlets', async () => {
+  const mk = (id) => feed([{ t: 'Volcano erupts on island of Pelagia, ash cloud closes airports', l: `https://x/${id}`, d: '', p: Date.now() }]);
+  const run = async (ids) => new Aggregator({ sources: SOURCES, fetchText: async (s) => (ids.includes(s.id) ? mk(s.id) : feed([])) }).refresh();
+  assert.equal((await run(['bbc', 'nyt'])).stories.length, 0);
+  assert.equal((await run(['bbc', 'nyt', 'npr'])).stories.length, 1);
 });

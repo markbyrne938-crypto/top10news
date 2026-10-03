@@ -40,7 +40,7 @@ function pointsEl(s) {
   for (const p of s.points) {
     const li = el('li');
     li.append(p.text + ' ');
-    li.appendChild(el('span', 'attr', p.sources.length > 3 ? `${p.sources.slice(0, 3).join(', ')} and ${p.sources.length - 3} more` : p.sources.join(', ')));
+    li.appendChild(el('span', 'attr', p.sources.length > 2 ? `${p.sources.slice(0, 2).join(', ')} +${p.sources.length - 2}` : p.sources.join(', ')));
     ul.appendChild(li);
   }
   return ul;
@@ -111,15 +111,22 @@ function kickerEl(s, label) {
 }
 
 function storyEl(s, variant, flashIds) {
-  const art = el('article', `story story--${variant}${flashIds.has(s.id) ? ' flash' : ''}`);
-  art.appendChild(kickerEl(s, variant === 'row' ? '' : undefined));
+  const outer = el('article', `story story--${variant}${flashIds.has(s.id) ? ' flash' : ''}`);
+  let art = outer;
+  if (variant === 'lead' || variant === 'second') { // ranks 1-3 get a large numeral
+    outer.classList.add('numbered');
+    outer.appendChild(el('div', 'bignum', String(s.rank)));
+    art = el('div', 'body');
+    outer.appendChild(art);
+  }
+  art.appendChild(kickerEl(s, ''));
   const h = el(variant === 'lead' ? 'h2' : 'h3');
   const a = el('a', null, s.headline);
   a.href = safeUrl(s.items[0].url); a.target = '_blank'; a.rel = 'noopener noreferrer';
   h.appendChild(a);
   art.appendChild(h);
   for (const part of [pointsEl(s), differEl(s), readMoreEl(s), metaEl(s), whyEl(s)]) if (part) art.appendChild(part);
-  return art;
+  return outer;
 }
 
 function compactEl(s) {
@@ -145,6 +152,11 @@ function renderStories(flashIds) {
   if (topic === 'Top 10' ) {
     const top = data.stories.filter(pass);
     const [lead, ...others] = top;
+    if (!region && data.stories.length < 10) {
+      nodes.push(el('p', 'small thin', data.stories.length
+        ? `Showing ${data.stories.length} stories. Only stories reported by at least three outlets are published.`
+        : 'No story is reported by three outlets yet. Check back shortly.'));
+    }
     if (!top.length) nodes.push(el('p', 'empty', 'No top-10 stories are covered by outlets in that region right now.'));
     if (lead) nodes.push(storyEl(lead, 'lead', flashIds));
     if (others.length) {
