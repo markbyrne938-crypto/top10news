@@ -41,9 +41,17 @@ const NOISE = {
              { t: 'Cup final: Qalatar beat Brantland on penalties', l: 'https://www.theguardian.com/football/2026/oct/03/cup-final', d: 'Match report.' }],
   nyt: [{ t: 'Video: A tour of the new Lumina lab', l: 'https://www.nytimes.com/video/technology/lumina', d: '' }],
 };
+const DETAIL = {
+  quake: ['The quake struck about 40 kilometres offshore at a shallow depth, the geological survey said.', 'At least 12 people were killed and dozens injured, local officials said.', 'Rescue teams were searching collapsed buildings in several coastal towns.', 'Authorities said no tsunami warning had been issued.'],
+  bank: ['Policymakers said inflation had cooled but remained above target.', 'The bank signalled that any future cuts would depend on incoming data.'],
+  talks: ['Negotiators from both sides met for a second day at a hotel in Geneva.', 'Mediators said discussions focused on a monitored ceasefire along the border.'],
+  fire: ['Strong winds pushed flames toward several towns on Friday.', 'Emergency services said more than 3,000 residents had been told to leave their homes.'],
+  vote: ['Opinion polls had shown the two candidates separated by only a few points.'],
+};
 const GOOGLE = new Set(['reuters', 'ap', 'afp']);
 const pub = { reuters: 'Reuters', ap: 'AP News', afp: 'AFP' };
 
+DETAIL.quake = DETAIL.quake.slice();
 const dir = path.join(__dirname, 'samples', 'synthetic-1');
 fs.mkdirSync(dir, { recursive: true });
 for (const [src, plan] of Object.entries(PLAN)) {
@@ -54,7 +62,8 @@ for (const [src, plan] of Object.entries(PLAN)) {
     const title = S[story][v % S[story].length];
     items.push(GOOGLE.has(src)
       ? { t: `${title} - ${pub[src]}`, l: `https://news.google.com/rss/articles/${src}-${story}-${v}`, d: `<ol><li><a href="https://x">${title}</a>&nbsp;&nbsp;<font>${pub[src]}</font></li></ol>`, p: NOW - (i + 1) * 25 * 60000 }
-      : { t: title, l: `https://www.${src}.example/news/${story}-${v}`, d: `${title}. Officials said more details were expected later today.`, p: NOW - (i + 1) * 25 * 60000 });
+      : { t: title, l: `https://www.${src}.example/news/${story}-${v}`, d: `${title}. ${(DETAIL[story] || ['Officials said more details were expected later today.']).slice(i % 2, (i % 2) + 2).join(' ')}`, p: NOW - (i + 1) * 25 * 60000 });
+    if (src === 'aljazeera' && story === 'quake') items[items.length - 1].d = items[items.length - 1].d.replace('12 people', '15 people');
   });
   for (const n of noise) items.push({ ...n, p: NOW - 90 * 60000 });
   fs.writeFileSync(path.join(dir, `${src}.xml`), feed(items));

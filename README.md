@@ -43,6 +43,6 @@ Preview the static build locally: `DEMO=1 node scripts/build-static.js && npx se
 - Reuters and AP no longer publish official RSS feeds, and AFP content is syndicated, so those three are read through
   Google News RSS searches (`approx: true` in `sources.js`). Their position reflects Google's ordering, not the outlet's homepage.
   Swap in licensed feeds or APIs there if you have them.
-- Only headlines, short feed summaries and links are shown; every card links to each outlet's own article.
+- Only headlines, sentences from the short summaries outlets publish in their own feeds (quoted as published, credited to the outlets that say them) and links are shown. No articles are rewritten or copied and no images are hosted; every card links to each outlet's own report via "Read more at".
 - "Unbiased" here means breadth: stories are ranked by agreement across many outlets and countries, wording is taken
   from the wire service when available, and all outlet versions are linked. It can't remove bias in the underlying sources.

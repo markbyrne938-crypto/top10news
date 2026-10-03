@@ -12,8 +12,9 @@ const { toRss } = require('../lib/feed');
 (async () => {
   const root = path.join(__dirname, '..');
   const dist = path.join(root, 'dist');
-  const demo = process.env.DEMO === '1';
-  const agg = new Aggregator(demo ? { sources: SOURCES, fetchText: require('../lib/demo').makeDemoFetch() } : { sources: SOURCES });
+  const demo = process.env.DEMO === '1' || !!process.env.SAMPLE;
+  const sample = process.env.SAMPLE; // preview from a saved feed set, e.g. SAMPLE=synthetic-1
+  const agg = new Aggregator(sample ? { sources: SOURCES, fetchText: async (src) => fs.readFileSync(path.join(root, 'test/samples', sample, src.id + '.xml'), 'utf8') } : demo ? { sources: SOURCES, fetchText: require('../lib/demo').makeDemoFetch() } : { sources: SOURCES });
 
   try { agg.restore(JSON.parse(fs.readFileSync(process.env.PREV_JSON || path.join(dist, 'data/top10.json'), 'utf8'))); } catch {}
 

@@ -125,3 +125,13 @@ a:focus-visible,button:focus-visible,select:focus-visible,summary:focus-visible{
 .sections>*{min-width:0}
 #topics{flex:1 1 auto}
 .dateline span:last-child{text-align:right}
+
+/* key points */
+.points{margin:2px 0 12px;padding-left:1.15em;color:var(--ink)}
+.points li{margin:0 0 6px;padding-left:2px;line-height:1.4}
+.story--lead .points{font-size:1.14rem}
+.points li::marker{color:var(--accent)}
+.attr{font:12px var(--sans);color:var(--faint);white-space:normal}
+.differ{font:13px/1.45 var(--sans);margin:0 0 10px;padding:6px 0 6px 10px;border-left:3px solid var(--accent);color:var(--soft)}
+.more{font:13px/1.5 var(--sans);margin:0 0 8px;color:var(--soft)}
+.more a{text-underline-offset:2px;color:var(--ink)}

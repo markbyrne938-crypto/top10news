@@ -27,20 +27,47 @@ function ago(ms) {
 const clock = (ms) => new Date(ms).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
 /* ---------- story pieces ---------- */
-function bylineEl(s) {
-  const p = el('p', 'by');
-  p.append('Reported by ');
-  const shown = s.items.slice(0, 3);
-  shown.forEach((it, i) => {
-    const a = el('a', null, it.sourceName);
-    a.href = safeUrl(it.url); a.target = '_blank'; a.rel = 'noopener noreferrer'; a.title = it.title;
-    const node = it.kind === 'wire' ? el('b') : document.createDocumentFragment();
-    node.append(a);
-    p.append(node);
-    if (i < shown.length - 1) p.append(i === shown.length - 2 && s.items.length === shown.length ? ' and ' : ', ');
+function link(it, text) {
+  const a = el('a', null, text || it.sourceName);
+  a.href = safeUrl(it.url); a.target = '_blank'; a.rel = 'noopener noreferrer'; a.title = it.title;
+  return a;
+}
+
+// Key points taken from the outlets' own feed summaries, each credited to the outlets that say it.
+function pointsEl(s) {
+  if (!s.points || !s.points.length) return s.summary ? el('p', 'stand', s.summary) : null;
+  const ul = el('ul', 'points');
+  for (const p of s.points) {
+    const li = el('li');
+    li.append(p.text + ' ');
+    li.appendChild(el('span', 'attr', p.sources.length > 3 ? `${p.sources.slice(0, 3).join(', ')} and ${p.sources.length - 3} more` : p.sources.join(', ')));
+    ul.appendChild(li);
+  }
+  return ul;
+}
+
+function differEl(s) {
+  if (!s.differences || !s.differences.length) return null;
+  const box = el('p', 'differ');
+  box.appendChild(el('b', null, 'Outlets differ. '));
+  box.append(s.differences.map((d) => `${d.label}: ` + d.values.map((v) => `${v.value} (${v.sources.length > 2 ? v.sources.slice(0, 2).join(', ') + ' +' + (v.sources.length - 2) : v.sources.join(', ')})`).join(' vs. ')).join('. ') + '.');
+  return box;
+}
+
+function readMoreEl(s) {
+  const p = el('p', 'more');
+  p.append('Read more at ');
+  s.items.forEach((it, i) => {
+    const a = link(it);
+    if (it.kind === 'wire') { const b = el('b'); b.appendChild(a); p.append(b); } else p.append(a);
+    if (i < s.items.length - 1) p.append(' · ');
   });
-  const rest = s.items.length - shown.length;
-  if (rest > 0) p.append(` and ${rest} other${rest === 1 ? '' : 's'}`);
+  return p;
+}
+
+function metaEl(s) {
+  const p = el('p', 'by');
+  p.append(`${s.sourceCount} source${s.sourceCount === 1 ? '' : 's'}`);
   if (s.published) p.append(` · ${ago(s.published)}`);
   if (s.regions.length === 1 && s.sourceCount > 1) {
     p.append(' · ');
@@ -91,9 +118,7 @@ function storyEl(s, variant, flashIds) {
   a.href = safeUrl(s.items[0].url); a.target = '_blank'; a.rel = 'noopener noreferrer';
   h.appendChild(a);
   art.appendChild(h);
-  if (s.summary) art.appendChild(el('p', 'stand', s.summary));
-  art.appendChild(bylineEl(s));
-  art.appendChild(whyEl(s));
+  for (const part of [pointsEl(s), differEl(s), readMoreEl(s), metaEl(s), whyEl(s)]) if (part) art.appendChild(part);
   return art;
 }
 

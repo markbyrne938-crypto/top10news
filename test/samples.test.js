@@ -66,3 +66,25 @@ test('synthetic-1: breakdown explains the score', async () => {
     assert.ok(s.topic && s.regions.length >= 1);
   }
 });
+
+test('synthetic-1: key points are sourced, short, and not headline restatements', async () => {
+  const snap = await run('synthetic-1');
+  const tam = snap.stories.find((s) => /Tamarinda/.test(s.headline));
+  assert.ok(tam.points.length >= 2 && tam.points.length <= 4, 'got ' + tam.points.length);
+  for (const p of tam.points) {
+    assert.ok(p.sources.length >= 1 && p.text.length <= 300);
+    assert.ok(!/more details were expected/.test(p.text), 'boilerplate excluded');
+  }
+  assert.ok(tam.points.some((p) => p.sources.length >= 3), 'a point backed by several outlets ranks first');
+  assert.ok(tam.points[0].sources.length >= tam.points[tam.points.length - 1].sources.length);
+});
+
+test('synthetic-1: conflicting figures are flagged with who said what', async () => {
+  const snap = await run('synthetic-1');
+  const tam = snap.stories.find((s) => /Tamarinda/.test(s.headline));
+  const d = tam.differences.find((x) => x.label === 'Deaths reported');
+  assert.ok(d, 'death toll difference detected');
+  const v15 = d.values.find((v) => v.value === '15');
+  assert.deepEqual(v15.sources, ['Al Jazeera']);
+  assert.ok(d.values.find((v) => v.value === '12').sources.length >= 2);
+});
